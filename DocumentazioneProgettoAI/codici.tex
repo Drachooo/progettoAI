@@ -202,7 +202,225 @@ Questo garantisce che la policy trovata sia quella ottimale $\pi^*$.
 
 
 
-
+\newpage
 \section{Algoritmi visti}
+UNINFORMED SEARCH\\
+\section{Analisi dell'Algoritmo: BFS Tree Search}
+
+Il codice implementa la \textit{Breadth-First Search} (BFS) nella variante \textbf{Tree Search}. A differenza della \textit{Graph Search}, questa versione non tiene traccia degli stati già visitati (non utilizza un insieme \textit{explored}), il che la rende adatta solo ad ambienti privi di cicli o dove la ridondanza è gestibile.
+
+L'algoritmo esplora lo spazio degli stati livello per livello, garantendo di trovare la soluzione più breve (in termini di numero di passi) se ne esiste una.
+
+\subsection{Inizializzazione}
+La funzione inizia creando il nodo radice corrispondente allo stato iniziale del problema:
+\begin{verbatim}
+node = Node(problem.startstate, None)
+\end{verbatim}
+Vengono inizializzati i contatori per le metriche di performance:
+\begin{itemize}
+    \item \code{time\_cost = 1}: Conta il numero di nodi generati (inizialmente solo la radice).
+    \item \code{space\_cost = 1}: Traccia il numero massimo di nodi in memoria simultaneamente.
+\end{itemize}
+
+\subsection{Goal Test Preliminare}
+Prima di avviare il ciclo di ricerca, viene effettuato un controllo immediato: se lo stato iniziale è già lo stato obiettivo, la ricerca termina con successo a costo zero:
+\begin{verbatim}
+if node.state == problem.goalstate:
+    return build_path(node), time_cost, space_cost
+\end{verbatim}
+
+\subsection{Gestione della Frontiera}
+La frontiera viene inizializzata come una \textbf{Coda FIFO} (\textit{First-In, First-Out}), tipica della BFS:
+\begin{verbatim}
+frontier = NodeQueue()
+frontier.add(node)
+\end{verbatim}
+L'uso di una coda assicura che i nodi vengano espansi nell'ordine in cui sono stati generati (prima i nodi a profondità $d$, poi quelli a $d+1$).
+
+\subsection{Ciclo di Esplorazione (Loop)}
+Il ciclo \code{while} continua finché la frontiera non è vuota. Ad ogni iterazione:
+\begin{enumerate}
+    \item \textbf{Estrazione}: Il nodo in testa alla coda viene rimosso (\code{frontier.remove()}) per essere espanso.
+    
+    \item \textbf{Espansione}: Si itera su tutte le azioni possibili definite dallo spazio delle azioni (\code{problem.action\_space.n}). Per ogni azione:
+    \begin{itemize}
+        \item Viene generato il nuovo stato successore tramite \code{problem.sample(node.state, action)}.
+        \item Viene creato un nuovo oggetto \code{child} (figlio), collegandolo al padre (\code{node}).
+        \item Si incrementa il \code{time\_cost} poiché è stato generato un nuovo nodo.
+    \end{itemize}
+
+    \item \textbf{Goal Test all'Espansione}: Una caratteristica fondamentale di questa implementazione efficiente della BFS è che il controllo dell'obiettivo avviene al momento della generazione del figlio, non alla sua estrazione:
+    \begin{verbatim}
+if problem.goalstate == child.state: 
+    return build_path(child), time_cost, space_cost
+    \end{verbatim}
+    Questo risparmia tempo e memoria evitando di inserire il nodo goal nella frontiera per poi doverlo estrarre successivamente.
+
+    \item \textbf{Aggiornamento Frontiera e Space Cost}: Se il nodo non è l'obiettivo, viene aggiunto alla coda. Dopo ogni ciclo di espansione, si aggiorna lo \code{space\_cost} se la dimensione corrente della frontiera supera il massimo registrato in precedenza:
+    \begin{verbatim}
+space_cost = max(space_cost, len(frontier))
+    \end{verbatim}
+\end{enumerate}
+
+\subsection{Conclusione}
+Se il ciclo termina e la frontiera si svuota senza aver trovato l'obiettivo, la funzione restituisce \code{None} (fallimento), insieme ai costi computazionali sostenuti.
+
+
+BFS versione GraphSearch:
+\section{Analisi dell'Algoritmo: BFS Graph Search}
+
+Questa funzione implementa la variante \textbf{Graph Search} della BFS. A differenza della \textit{Tree Search}, questa versione è progettata per gestire ambienti contenenti cicli o percorsi ridondanti, evitando di ri-esplorare stati già visitati.
+
+\subsection{Inizializzazione e Strutture Dati}
+Come nella versione precedente, viene creato il nodo radice e verificato se è immediatamente l'obiettivo. La differenza sostanziale risiede nelle strutture dati utilizzate:
+
+\begin{enumerate}
+    \item \textbf{Frontiera}: Una coda FIFO (\code{NodeQueue}) per gestire l'ordine di esplorazione in ampiezza.
+    \item \textbf{Insieme Esplorati}: Viene inizializzato un insieme vuoto:
+    \begin{verbatim}
+explored = set()
+    \end{verbatim}
+    Questo set (spesso chiamato \textit{Closed List}) memorizzerà gli stati che sono già stati espansi, permettendo controlli di appartenenza in tempo costante $O(1)$ (o quasi, a seconda dell'implementazione dell'hashing).
+\end{enumerate}
+
+\subsection{Ciclo di Esplorazione}
+Il ciclo \code{while} procede finché la frontiera non è vuota. Le operazioni chiave sono:
+
+\subsubsection{Estrazione e Marcatura}
+Quando un nodo viene estratto dalla frontiera (\code{frontier.remove()}), il suo stato viene immediatamente aggiunto all'insieme \code{explored}:
+\begin{verbatim}
+node = frontier.remove()
+explored.add(node.state)
+\end{verbatim}
+Questo "chiude" lo stato: da questo momento in poi, sappiamo di averlo già analizzato.
+
+\subsubsection{Espansione e Filtraggio (Graph Search)}
+Durante la generazione dei figli, l'algoritmo applica il filtro fondamentale che distingue la Graph Search dalla Tree Search. Per ogni nodo figlio generato (\code{child}):
+\begin{verbatim}
+if child.state not in explored and child.state not in frontier:
+\end{verbatim}
+Questa condizione verifica due cose:
+\begin{itemize}
+    \item \textbf{Non in Explored}: Assicura che non torniamo su uno stato già visitato (evita cicli infiniti).
+    \item \textbf{Non in Frontier}: Assicura che non aggiungiamo alla coda un nodo che è già in attesa di essere esplorato (evita ridondanza).
+\end{itemize}
+
+\subsubsection{Goal Test e Inserimento}
+Se il nodo figlio supera il filtro (è un nuovo stato), viene effettuato il test dell'obiettivo (Early Goal Test):
+\begin{verbatim}
+if child.state == problem.goalstate:
+    return build_path(child), time_cost, space_cost
+\end{verbatim}
+Se non è l'obiettivo, viene aggiunto alla frontiera per la futura espansione.
+
+\subsection{Analisi dei Costi}
+\begin{itemize}
+    \item \textbf{Time Cost}: Incrementato ogni volta che viene generato un nodo figlio (\code{child = Node(...)}).
+    \item \textbf{Space Cost}: In questa versione, la complessità spaziale deve tenere conto di tutti i nodi mantenuti in memoria. La formula utilizzata somma sia i nodi in attesa (frontiera) sia quelli già visitati (explored):
+    \begin{verbatim}
+space_cost = max(space_cost, len(frontier) + len(explored))
+    \end{verbatim}
+    Questo riflette il fatto che, in una Graph Search, la memoria non viene mai liberata per gli stati visitati, portando a un'occupazione di memoria lineare rispetto al numero di stati del grafo ($O(|V|)$).
+\end{itemize}
+
+
+
+
+\section{Ricerca a Profondità Limitata (DLS)}
+
+La \textit{Depth-Limited Search} (DLS) è una variante della \textit{Depth-First Search} (DFS) che impone un limite massimo alla profondità di esplorazione. Questo risolve il problema principale della DFS: il rischio di perdersi in percorsi infiniti o eccessivamente profondi.
+
+\subsection{Struttura della Funzione Ricorsiva}
+La funzione \code{Recursive\_DLS\_TreeSearch} implementa la logica core dell'algoritmo. Riceve in input il nodo corrente e un budget residuo (\code{limit}).
+
+\subsubsection{Casi Base}
+La ricorsione si arresta in due situazioni:
+\begin{enumerate}
+    \item \textbf{Goal Test}: Se il nodo corrente è lo stato obiettivo:
+    \begin{verbatim}
+if problem.goalstate == node.state:
+    return build_path(node), 1, node.depthcost
+    \end{verbatim}
+    Restituisce la soluzione trovata.
+    
+    \item \textbf{Cutoff (Limite Raggiunto)}: Se il \code{limit} scende a 0 e non siamo sul goal:
+    \begin{verbatim}
+elif limit == 0:
+    return "cut_off", 1, node.depthcost
+    \end{verbatim}
+    Restituisce il valore speciale \code{"cut\_off"}, che segnala che la ricerca è stata interrotta arbitrariamente, non perché l'albero sia finito, ma perché è finito il budget.
+\end{enumerate}
+
+\subsubsection{Passo Ricorsivo}
+Se non siamo in un caso base, l'algoritmo espande i nodi figli:
+\begin{enumerate}
+    \item Itera sulle azioni possibili.
+    \item Chiama se stessa ricorsivamente riducendo il limite: \code{limit - 1}.
+    \item Aggrega i risultati:
+    \begin{itemize}
+        \item \code{time\_cost}: Somma i nodi esplorati dai figli.
+        \item \code{space\_cost}: Calcola la profondità massima raggiunta (max tra i figli).
+    \end{itemize}
+\end{enumerate}
+
+\subsubsection{Gestione del Risultato (Backtracking)}
+Durante la risalita dalla ricorsione, l'algoritmo deve distinguere tra un fallimento reale (vicolo cieco) e un taglio (cutoff):
+\begin{itemize}
+    \item Se un figlio restituisce una soluzione, questa viene propagata immediatamente verso l'alto.
+    \item Se un figlio restituisce \code{"cut\_off"}, si imposta un flag \code{cut\_off\_occurred = True}.
+    \item Alla fine del ciclo sui figli:
+    \begin{verbatim}
+if(cut_off_occurred): return "cut_off", ...
+else: return "failure", ...
+    \end{verbatim}
+    Se non abbiamo trovato soluzioni ma abbiamo incontrato almeno un cutoff, restituiamo \code{"cut\_off"} (potrebbe esserci una soluzione più in profondità). Se non c'è stato nessun cutoff, significa che abbiamo esplorato tutto il sotto-albero senza trovare nulla: è un \code{"failure"}.
+\end{itemize}
+
+\section{Iterative Deepening Search (IDS)}
+
+L'\textit{Iterative Deepening Search} (IDS) combina i vantaggi della BFS (completezza e ottimalità) con quelli della DFS (bassa occupazione di memoria).
+L'idea è eseguire una serie di DLS con limiti di profondità crescenti: $limit = 0, 1, 2, \dots, \infty$.
+
+
+
+\subsection{Implementazione}
+La funzione \code{IDS} funge da wrapper che gestisce il ciclo delle profondità.
+
+\subsubsection{Ciclo Principale}
+Il codice utilizza un generatore o un ciclo infinito per incrementare la profondità $i$:
+\begin{verbatim}
+for i in zero_to_infinity():
+\end{verbatim}
+Ad ogni iterazione, viene lanciata una nuova ricerca DLS ripartendo da zero (nuovo nodo radice) con il nuovo limite $i$:
+\begin{verbatim}
+node = Node(problem.startstate, None)
+solution_dls, time, space = DLS_Function(node, problem, i, set())
+\end{verbatim}
+
+\subsubsection{Aggregazione dei Costi}
+Un aspetto cruciale dell'IDS è come vengono calcolati i costi:
+\begin{itemize}
+    \item \code{total\_time\_cost += time\_cost}: Poiché IDS rigenera i nodi delle profondità precedenti ad ogni iterazione, il costo temporale è cumulativo. Se la soluzione è a profondità $d$, i nodi a profondità 1 sono stati generati $d$ volte.
+    \item \code{total\_space\_cost = max(...)}: Lo spazio richiesto è determinato solo dall'ultima iterazione (quella più profonda), poiché la memoria viene liberata tra un'iterazione e l'altra.
+\end{itemize}
+
+\subsubsection{Terminazione}
+L'algoritmo termina quando la DLS restituisce un risultato diverso da \code{"cut\_off"}:
+\begin{verbatim}
+if solution_dls != "cut_off":
+    return solution_dls, total_time, total_space, i
+\end{verbatim}
+Questo significa che:
+\begin{itemize}
+    \item O ha trovato una \textbf{Soluzione} valida.
+    \item O ha restituito \textbf{Failure} (il che significa che l'intero spazio degli stati è stato esplorato fino alla fine senza trovare soluzioni, quindi è inutile aumentare il limite).
+\end{itemize}
+
+
+
+
+
+
+
 
 \end{document}
