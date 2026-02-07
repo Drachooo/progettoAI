@@ -1,29 +1,25 @@
-\documentclass[a4paper, 12pt]{article} % Tipo di documento e dimensione font
+\documentclass[a4paper, 12pt]{article}
 
 % --- CODIFICA E LINGUA ---
-\usepackage[utf8]{inputenc}  % Per scrivere accentate direttamente (à, è, ì...)
-\usepackage[T1]{fontenc}     % Migliora la gestione dei font nel PDF
-\usepackage[italian]{babel}  % Traduce le diciture automatiche (es. "Indice", "Figura")
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[italian]{babel}
 
 % --- MATEMATICA E SCIENZE ---
-\usepackage{amsmath}  % Il pacchetto base per la matematica
-\usepackage{amssymb}  % Simboli matematici aggiuntivi
-\usepackage{amsfonts} % Font matematici
+\usepackage{amsmath, amssymb, amsfonts}
 
-% --- IMMAGINI E GRAFICA ---
-\usepackage{graphicx} % Fondamentale per inserire immagini (\includegraphics)
-\usepackage{float}    % Per forzare la posizione delle immagini (usando [H])
+% --- LAYOUT E GRAFICA ---
+\usepackage{geometry}
+\geometry{top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{caption}
 
-% --- LAYOUT E MARGINI ---
-\usepackage{geometry} % Per modificare i margini
-\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm}
-
-% --- TABELLE ---
-\usepackage{booktabs} % Per tabelle dall'aspetto professionale
-\usepackage{caption}  % Per personalizzare le didascalie
-
-% --- LINK E RIFERIMENTI (Caricare quasi sempre per ultimo) ---
-\usepackage{hyperref} % Rende cliccabili l'indice e i riferimenti
+% --- LINK E RIFERIMENTI ---
+\usepackage{hyperref}
 \hypersetup{
     colorlinks=true,
     linkcolor=black,
@@ -31,9 +27,182 @@
     urlcolor=blue,
 }
 
+% Comando personalizzato per il codice
+\newcommand{\code}[1]{\texttt{\textcolor{blue!60!black}{#1}}}
+
+\title{\textbf{Documentazione Progetto AI}}
+\author{Analisi degli Algoritmi e dell'Ambiente}
+\date{\today}
+
 \begin{document}
 
-% Qui inizia il tuo testo...
-Documentazione rapida per il progetto di Intelligenza Artificiale
+\maketitle
+
+\section{Esplorazione dell'Ambiente e Dinamiche}
+Prima di applicare gli algoritmi risolutivi, è fondamentale analizzare le proprietà del \textit{Markov Decision Process} (MDP) definito dall'ambiente \code{AquaticEnv-v0}. Il codice di ispezione ci permette di comprendere la struttura delle ricompense e delle transizioni.
+
+\subsection{La Struttura delle Ricompense (\texttt{env.RS})}
+L'oggetto \code{env.RS} rappresenta la \textbf{Funzione di Ricompensa} (Reward Function) $R(s)$.
+In questo ambiente, la ricompensa è modellata come funzione del solo stato di arrivo. \code{env.RS} è un vettore di dimensione pari al numero di stati $|\mathcal{S}|$, dove l'elemento $i$-esimo contiene la ricompensa immediata ottenuta entrando nello stato $i$.
+
+Matematicamente:
+\[
+R(s) = \code{env.RS}[s]
+\]
+Ad esempio, per lo stato obiettivo (Goal, indicato con "G"), ci si aspetta un valore positivo, mentre per gli stati ostacolo un valore negativo o nullo.
+
+\subsection{Matrice di Transizione (\texttt{env.T})}
+La matrice (o tensore) \code{env.T} definisce la dinamica del sistema, ovvero la probabilità di transizione $P(s' | s, a)$:
+\[
+P(s' | s, a) = \code{env.T}[s, a, s']
+\]
+Dove $s$ è lo stato corrente, $a$ l'azione e $s'$ lo stato successivo.
+L'analisi del codice mette a confronto due tipologie di stati:
+\begin{enumerate}
+    \item \textbf{Stato Deterministico} (es. \code{state = 1}): L'azione scelta porta quasi sicuramente allo stato desiderato. La probabilità di successo è vicina a 1.
+    \item \textbf{Stato Stocastico} (es. \code{state = 13}): Qui l'ambiente introduce incertezza (simulando ad esempio correnti acquatiche). Anche scegliendo un'azione precisa, la probabilità di finire nello stato target potrebbe essere bassa, distribuendosi su altri stati adiacenti.
+\end{enumerate}
+
+\section{Algoritmo: Value Iteration}
+L'obiettivo di questo algoritmo è calcolare la funzione valore ottimale $V^*(s)$ per ogni stato $s$ dell'ambiente, risolvendo iterativamente l'Equazione di Bellman per l'ottimalità.
+
+\subsection{Inizializzazione}
+La funzione \code{acquaticValueIteration} inizia inizializzando due vettori di dimensione pari al numero di stati (\code{env.observation\_space.n}):
+\begin{itemize}
+    \item \code{U\_1}: rappresenta i valori allo step corrente, matematicamente $V_{k+1}(s)$.
+    \item \code{U}: rappresenta i valori allo step precedente, matematicamente $V_k(s)$.
+\end{itemize}
+Inizialmente, $V_0(s) = 0$ per tutti gli stati.
+
+\subsection{Il Ciclo Principale}
+L'algoritmo entra in un ciclo \code{while True} che continua finché i valori non convergono o si raggiunge il limite \code{maxIterazione}. Ad ogni iterazione $k$, per ogni stato $s$, viene eseguito un aggiornamento basato sulla natura dello stato.
+
+\subsubsection{Gestione degli Stati Terminali}
+Se lo stato corrente è un obiettivo (indicato da \code{"G"} nella griglia):
+\[
+\text{if } \code{env.grid[state]} == \text{"G"}
+\]
+Il valore dello stato viene fissato semplicemente alla sua ricompensa immediata, poiché non ci sono transizioni future:
+\[
+V_{k+1}(s) = R(s)
+\]
+Dove \code{env.RS[state]} corrisponde a $R(s)$.
+
+\subsubsection{Aggiornamento di Bellman (Stati Non Terminali)}
+Per tutti gli altri stati, l'algoritmo calcola il valore atteso per ogni possibile azione. Questo corrisponde al blocco di codice:
+\begin{verbatim}
+insiemePunteggiAzioni[action] += 
+    env.T[state, action, nextState] * U[nextState]
+\end{verbatim}
+
+Matematicamente, per ogni azione $a$, si calcola il valore $Q$ (Quality):
+\[
+Q_k(s, a) = \sum_{s'} P(s' | s, a) \cdot V_k(s')
+\]
+Dove:
+\begin{itemize}
+    \item \code{env.T[state, action, nextState]} è la probabilità di transizione $P(s' | s, a)$.
+    \item \code{U[nextState]} è il valore dello stato successivo all'iterazione precedente $V_k(s')$.
+\end{itemize}
+
+Successivamente, si applica l'operatore di Bellman per trovare il valore ottimale dello stato massimizzando sulle azioni:
+\[
+V_{k+1}(s) = R(s) + \gamma \cdot \max_{a} \{ Q_k(s, a) \}
+\]
+Nel codice Python:
+\[
+\code{U\_1[state]} = \code{env.RS[state]} + \code{discount} \cdot \max(\code{insiemePunteggiAzioni})
+\]
+
+\subsection{Condizione di Terminazione}
+Alla fine di ogni scansione degli stati, viene calcolata la massima differenza ("norma infinito") tra il vettore dei valori nuovi e vecchi:
+\[
+\delta = \max_s | V_{k+1}(s) - V_k(s) |
+\]
+Nel codice: \code{delta = max(delta, abs(U\_1[state] - U[state]))}.
+
+L'algoritmo termina se:
+\[
+\delta < \epsilon \cdot \frac{1 - \gamma}{\gamma}
+\]
+Questa specifica condizione garantisce che l'errore sulla policy finale sia limitato. Se la condizione è vera, il ciclo si interrompe (\code{break}).
+
+\subsection{Output}
+La funzione restituisce:
+\begin{enumerate}
+    \item La \textbf{Policy Ottimale} $\pi^*(s)$, ottenuta chiamando la funzione ausiliaria \code{values\_to\_policy} sul vettore dei valori finali.
+    \item Il vettore dei valori \code{U} che approssima $V^*(s)$.
+\end{enumerate}
+
+
+
+
+
+\section{Algoritmo: Policy Iteration}
+
+Mentre la Value Iteration cerca di trovare direttamente la funzione valore ottimale, la \textbf{Policy Iteration} separa il problema in due sotto-fasi distinte che vengono ripetute ciclicamente: la valutazione della policy corrente e il suo miglioramento.
+
+La funzione \code{acquaticPolicyIteration} implementa questo approccio.
+
+\subsection{Inizializzazione}
+L'algoritmo inizia con una policy arbitraria (in questo caso, l'azione 0 per tutti gli stati):
+\begin{verbatim}
+policy = [0 for _ in range(env.observation_space.n)]
+\end{verbatim}
+Anche i valori degli stati \code{U} vengono inizializzati a zero.
+
+\subsection{Fase 1: Policy Evaluation (Valutazione)}
+All'interno del ciclo principale, il primo blocco di codice (\code{while True}) serve a calcolare il valore $V^\pi(s)$ della policy corrente $\pi$.
+A differenza della Value Iteration dove cerchiamo il \textit{massimo} tra le azioni, qui l'azione è fissata dalla policy corrente:
+\[
+a = \pi(s) = \code{policy[state]}
+\]
+L'aggiornamento del valore diventa quindi un'equazione lineare (risolta qui iterativamente):
+\[
+V_{k+1}^\pi(s) = R(s) + \gamma \sum_{s'} P(s' | s, \pi(s)) \cdot V_k^\pi(s')
+\]
+Nel codice Python:
+\begin{verbatim}
+u_somma += env.T[state, policy[state], nextState] * U[nextState]
+U_1[state] = env.RS[state] + discount * u_somma
+\end{verbatim}
+Questa fase termina quando i valori convergono per la policy fissata (condizione su \code{delta}).
+
+\subsection{Fase 2: Policy Improvement (Miglioramento)}
+Una volta calcolati i valori accurati per la policy corrente, l'algoritmo verifica se esiste un'azione che fornisce un risultato migliore rispetto a quella attualmente scelta.
+
+Per ogni stato $s$, viene calcolato il valore Q per tutte le possibili azioni $a$:
+\[
+Q^\pi(s, a) = \sum_{s'} P(s' | s, a) \cdot V^\pi(s')
+\]
+Nel codice, questo vettore è chiamato \code{insiemePunteggiAzioni}.
+
+Successivamente, si confronta la migliore azione possibile con quella attuale:
+\[
+\text{Se } \max_a Q^\pi(s, a) > Q^\pi(s, \pi(s))
+\]
+Allora la policy viene aggiornata avidamente (\textit{Greedy Update}):
+\[
+\pi_{new}(s) = \arg\max_a Q^\pi(s, a)
+\]
+Nel codice:
+\begin{verbatim}
+if max(insiemePunteggiAzioni) > sommaPolicy:
+    policy[state] = argmax(insiemePunteggiAzioni)
+    unchanged = False
+\end{verbatim}
+
+\subsection{Terminazione}
+L'algoritmo termina quando la policy diventa \textbf{stabile}.
+La variabile booleana \code{unchanged} (inizializzata a \code{True} all'inizio del ciclo esterno) rimane vera solo se, durante la fase di miglioramento, non è stata trovata nessuna azione migliore per nessuno stato.
+\[
+\text{if unchanged: break}
+\]
+Questo garantisce che la policy trovata sia quella ottimale $\pi^*$.
+
+
+
+
+\section{Algoritmi visti}
 
 \end{document}
