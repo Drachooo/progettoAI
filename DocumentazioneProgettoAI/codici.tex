@@ -38,6 +38,136 @@
 
 \maketitle
 
+\section{Modellazione del Problema}
+Il problema è modellato come un Markov Decision Process (MDP) con:
+\begin{itemize}
+    \item Spazio degli stati finito (griglia $10 \times 10 \rightarrow 100$ stati),
+    \item Spazio delle azioni discreto (L, R, U, D),
+    \item Transizioni stocastiche (celle con correnti),
+    \item Ricompense immediate (costo di movimento, bonus energia, goal).
+\end{itemize}
+
+\section{Confronto tra gli Algoritmi}
+Perché la scelta di usare entrambi gli algoritmi?
+
+Il \textbf{Value Iteration} converge alla funzione valore ottimale $V^*$ solo in modo asintotico: ci si ferma quando il cambiamento tra due iterazioni è inferiore alla soglia \texttt{maxDifferenza}, tuttavia non ho mai la certezza matematica assoluta di aver raggiunto il valore esatto, ma solo un’approssimazione molto stretta.
+
+Il \textbf{Policy Iteration} converge alla policy ottimale in un numero finito di iterazioni. La PI esplora sistematicamente le opzioni fino a trovare quella perfetta. Il calcolo costa però al computer maggior tempo e maggior spazio, in correlazione a quanto grande è il problema da affrontare o l’ambiente preso in considerazione.
+
+\section{VALUE ITERATION}
+
+La Value Iteration ha come parametri:
+\begin{itemize}
+    \item \texttt{env}: ambiente MDP;
+    \item \texttt{maxIterazione}: limite per evitare loop infiniti;
+    \item \texttt{discount} ($\gamma$): fattore di sconto;
+    \item \texttt{maxDifferenza} ($\epsilon$): soglia di convergenza citata in precedenza.
+\end{itemize}
+
+\subsection{Alcune precisazioni}
+Il fattore di sconto, \texttt{discount}, serve a dare un valore attuale ai premi futuri. Senza questo valore l’algoritmo non sarebbe in grado di distinguere una strategia che guadagna poco ma per molto molto tempo e una strategia che guadagna tanto subito. Per visualizzarlo meglio immaginiamo un labirinto in cui la meta vale 100 punti; se la raggiungo in un passo, il valore è 100, se la raggiungo in due passi il valore muta in $100 \times 0.9 = 90$ e, seguendo questo andamento, se la raggiungessi in dieci passi, il valore diventerebbe circa 34. Analogamente, i malus che si possono trovare nell’ambiente sono tanto più “a valore pieno” quanto più vicini al premio. In definitiva, i valori che vengono calcolati avranno indicativamente, proprio come un’onda, un valore maggiore in vicinanza dell’obiettivo e sempre minore man mano che ci si allontana perché i valori calcolati allontanandocisi saranno il prodotto di sconti già subiti dai valori prima calcolati. Come un'onda che parte dall’obiettivo, i valori si scremano man mano che questa si diffonde.
+
+\subsection{Inizializzazione}
+Inizializzo due funzioni di valori (liste):
+\begin{itemize}
+    \item \texttt{U[]}: funzione di valore alla iterazione precedente;
+    \item \texttt{U\_1[]}: funzione di valore aggiornata.
+\end{itemize}
+che avranno inizialmente tutti gli stati a 0.
+
+\subsection{Ciclo Principale}
+Inizia il ciclo principale \texttt{while True}, dove all’interno ho:
+\begin{itemize}
+    \item \texttt{delta}: misura la massima variazione tra due iterazioni; servirà per verificare la convergenza
+    \item copiamo \texttt{U\_1} in \texttt{U}
+\end{itemize}
+Ora \texttt{U} è la “vecchia” funzione di valore perché da ora in avanti verrà aggiornata solo \texttt{U\_1}.
+
+Per ogni stato dell’ambiente, \texttt{for state}, io controllo:
+\begin{itemize}
+    \item Se lo stato è finale, in questo caso solo se è Goal, io gli do il valore +20 pescandolo dai reward dell’ambiente.
+    \item Altrimenti, per tutti gli altri stati:
+    \begin{enumerate}
+        \item Creo una lista \texttt{insiemePunteggiAzioni[]}, inizializzato a zero;
+        \item Per ogni azione, \texttt{for action}, e per ogni stato prossimo, \texttt{for nextState}, aggiorno la lista di \texttt{insiemePunteggiAzioni[]} sommando la probabilità, dato un certo stato, di finire in quello stato finale utilizzando quell’azione; tutto questo moltiplicato per il valore dello stato prossimo contenuto in \texttt{U}.
+    \end{enumerate}
+\end{itemize}
+
+La probabilità di transizione gestisce automaticamente la stocasticità delle correnti e si usa la vecchia funzione di valore \texttt{U}. Quindi \texttt{insiemePunteggiAzioni[]} alla fine avrà 4 valori corrispondenti a [valore utilizzando LEFT, valore utilizzando RIGHT, valore utilizzando UP, valore utilizzando DOWN].
+
+Fatto ciò, devo inserire in \texttt{U\_1} i valori aggiornati e quindi ogni stato assumerà il valore che aveva prima sommato al discount moltiplicato per il valore massimo contenuto in \texttt{insiemePunteggiAzioni[]}, questo per far sì che venga scelta l’azione che mi aspetto sia migliore.
+
+\subsection{Convergenza}
+Grazie al \texttt{delta} vedo a quanto risale la differenza tra lo stato aggiornato contenuto in \texttt{U\_1} ed il suo corrispettivo vecchio stato contenuto in \texttt{U}. Se la variazione massima \texttt{delta} tra due iterazioni successive della funzione di valore è minore di
+$$ \texttt{maxDifferenza} \times \frac{(1 - \texttt{discount})}{\texttt{discount}} $$
+oppure se è stato raggiunto il numero massimo di iterazioni consentite, allora l’algoritmo uscirà dal ciclo \texttt{while} e verrà ritornata la policy greedy. In breve, se \texttt{delta} è sufficientemente piccolo, la distanza tra la funzione di valore stimata e quella ottima è limitata superiormente.
+
+Dalla funzione di valore finale, \texttt{return}, si estrae la policy greedy e per ogni stato si seleziona l’azione che massimizza il valore atteso. In particolare, \texttt{np.asarray(U)} converte la lista Python \texttt{U} in un array NumPy; serve solo per compatibilità con la funzione \texttt{values\_to\_policy}, non cambia il contenuto, solo il tipo.
+
+\section{POLICY ITERATION}
+
+La Policy Iteration ha come parametri principali:
+\begin{itemize}
+    \item \texttt{env}: ambiente MDP;
+    \item \texttt{maxIterazione}: limite per evitare loop infiniti;
+    \item \texttt{discount} ($\gamma$): fattore di sconto che, come nella Value Iteration, serve a dare un valore attuale ai premi futuri;
+    \item \texttt{maxDifferenza} ($\epsilon$): soglia di convergenza per la valutazione della policy.
+\end{itemize}
+
+\subsection{Inizializzazione}
+Inizializzo due funzioni di valori (liste) e la policy casuale:
+\begin{itemize}
+    \item \texttt{U[]}: funzione di valore alla iterazione precedente;
+    \item \texttt{U\_1[]}: funzione di valore aggiornata;
+    \item \texttt{policy}: azione da eseguire nello stato $s$; inizialmente tutte le azioni sono settate a 0.
+\end{itemize}
+
+\subsection{Ciclo esterno}
+Il ciclo principale, \texttt{while True}, continua finché la policy cambia oppure non viene raggiunto il numero massimo di iterazioni.
+\texttt{cont} tiene traccia delle iterazioni esterne, cioè dei cicli Policy Evaluation + Policy Improvement.
+
+\subsection{Policy Evaluation – valutare la policy corrente}
+La policy corrente viene valutata calcolando i valori di tutti gli stati seguendo quella policy fissa.
+
+Per ogni stato dell’ambiente, \texttt{for state}, io controllo:
+\begin{itemize}
+    \item Se lo stato è finale, in questo caso solo se è Goal, io gli do il valore +20 pescandolo dai reward dell’ambiente.
+    \item Altrimenti, per tutti gli altri stati:
+    \begin{enumerate}
+        \item Inizializzo una variabile \texttt{u\_somma} a zero, che conterrà per ogni stato prossimo, \texttt{for nextState}, la somma della probabilità, dato un certo stato, di finire in quello stato finale utilizzando l'azione della policy di quello stato; tutto questo moltiplicato per il valore dello stato prossimo contenuto in \texttt{U}.
+        \item Fatto ciò, devo inserire in \texttt{U\_1} i valori aggiornati e quindi ogni stato assumerà il valore che aveva prima sommato al discount moltiplicato per \texttt{u\_somma}.
+    \end{enumerate}
+\end{itemize}
+
+Al contrario del VI, non ho da scegliere tra i valori delle quattro mosse perché sto seguendo la policy.
+
+Grazie al \texttt{delta} vedo a quanto risale la differenza tra lo stato aggiornato contenuto in \texttt{U\_1} ed il suo corrispettivo vecchio stato contenuto in \texttt{U}. Se la variazione massima \texttt{delta} tra due iterazioni successive della funzione di valore è minore di
+$$ \texttt{maxDifferenza} \times \frac{(1 - \texttt{discount})}{\texttt{discount}} $$
+oppure se è stato raggiunto il numero massimo di iterazioni consentite, allora l’algoritmo uscirà dal ciclo \texttt{while} e verrà ritornata la policy greedy. In breve, se \texttt{delta} è sufficientemente piccolo, la distanza tra la funzione di valore stimata e quella ottima è limitata superiormente.
+
+\subsection{Policy Improvement – aggiornare la policy}
+
+\subsubsection{\texttt{for} che apre nuovi orizzonti utilizzando tutte le mosse}
+Per ogni stato dell’ambiente, \texttt{for state}, si calcolano i valori attesi di tutte le possibili azioni nello stato attuale, il classico \texttt{insiemePunteggiAzioni[]}, ora a zero, contenente i valori di LEFT, RIGHT, UP e DOWN.
+
+Quindi per ogni azione, \texttt{for action}, e per ogni stato prossimo, \texttt{for nextState}, aggiorno la lista di \texttt{insiemePunteggiAzioni[]} sommando la probabilità, dato un certo stato, di finire in quello stato finale utilizzando quell’azione; tutto questo moltiplicato per il valore dello stato prossimo contenuto in \texttt{U}.
+
+\subsubsection{\texttt{for} che ricalcola i valori utilizzando solo la mossa della policy}
+Inizializzo \texttt{sommaPolicy}, il valore atteso dello stato seguendo la policy corrente, per ora a zero; piccola curiosità: il nostro \texttt{sommaPolicy} ha la stessa funzione del \texttt{u\_somma} precedentemente incontrato.
+
+Per ogni stato prossimo, \texttt{for nextState}, \texttt{sommaPolicy} assumerà il valore della probabilità, dato un certo stato, di finire in quello stato finale utilizzando quell’azione; tutto questo moltiplicato per il valore dello stato prossimo contenuto in \texttt{U}.
+
+\subsubsection{\texttt{if} che controlla se la mossa della policy può essere migliorata}
+Se un valore della migliore mossa calcolata su uno stato è maggiore della mossa della policy sul medesimo stato, devo aggiornare la mossa della policy e segnare che è avvenuto un cambiamento, \texttt{unchanged = False}.
+
+In caso \texttt{unchanged} risulti vero, e quindi la policy non è stata aggiornata, oppure il contatore ha superato le iterazioni, il ciclo esterno termina, permettendo di ritornare il risultato.
+
+Dalla funzione di valore finale, \texttt{return}, si estrae la policy ottima e per ogni stato si seleziona l’azione che massimizza il valore atteso. In particolare, \texttt{np.asarray(U)} converte la lista Python \texttt{U} in un array NumPy; serve solo per compatibilità con la funzione \texttt{values\_to\_policy}, non cambia il contenuto, solo il tipo.
+
+
+
+\newpage
+
 \section{Esplorazione dell'Ambiente e Dinamiche}
 Prima di applicare gli algoritmi risolutivi, è fondamentale analizzare le proprietà del \textit{Markov Decision Process} (MDP) definito dall'ambiente \code{AquaticEnv-v0}. Il codice di ispezione ci permette di comprendere la struttura delle ricompense e delle transizioni.
 
@@ -419,7 +549,79 @@ Questo significa che:
 
 
 
+\newpage
 
+
+\section{Uniform-Cost Search (UCS)}
+
+La \textit{Uniform-Cost Search} (UCS) è un algoritmo di ricerca non informata che esplora il grafo espandendo sempre il nodo con il costo di cammino cumulativo $g(n)$ più basso.
+A differenza della BFS, che espande in base alla profondità (numero di passi), la UCS garantisce di trovare la soluzione a costo minimo anche in grafi con costi degli archi variabili (o pesati).
+
+\subsection{Funzione Ausiliaria: \texttt{present\_with\_higher\_cost}}
+Prima di analizzare il ciclo principale, osserviamo la funzione helper:
+\begin{verbatim}
+def present_with_higher_cost(queue, node):
+    if node.state in queue:
+        if queue[node.state].pathcost > node.pathcost: 
+            return True
+    return False
+\end{verbatim}
+Questa funzione è cruciale per l'ottimizzazione. Verifica se il nodo che stiamo per inserire è già presente nella frontiera (coda di priorità), ma con un costo $g(n)$ \textbf{peggiore} (maggiore) di quello attuale. Se restituisce \code{True}, significa che abbiamo trovato un percorso più breve per raggiungere uno stato già noto, e quindi dobbiamo aggiornarlo.
+
+\subsection{Struttura dell'Algoritmo}
+
+\subsubsection{Inizializzazione}
+L'algoritmo utilizza una \textbf{Priority Queue} invece di una semplice FIFO queue.
+\begin{verbatim}
+queue = PriorityQueue()
+queue.add(Node(environment.startstate))
+\end{verbatim}
+La frontiera ordina i nodi in base al loro \code{pathcost}. Il nodo con il costo minore sarà sempre in testa.
+
+\subsubsection{Il Ciclo Principale e il Goal Test}
+
+Un punto fondamentale che distingue la UCS dalla BFS è la posizione del Goal Test.
+\begin{verbatim}
+node = queue.remove()  
+if node.state == environment.goalstate: 
+    return build_path(node), time_cost, space_cost
+\end{verbatim}
+Il controllo se siamo arrivati all'obiettivo viene effettuato **dopo l'estrazione** dalla coda, non durante la generazione.
+\begin{itemize}
+    \item \textit{Perché?} Se facessimo il controllo alla generazione (come in BFS), potremmo accettare un percorso sub-ottimale solo perché lo abbiamo trovato per primo. Controllando all'estrazione, siamo sicuri che il nodo estratto abbia il costo $g(n)$ minore possibile tra tutti quelli nella frontiera.
+\end{itemize}
+
+\subsubsection{Espansione e Aggiornamento}
+Per ogni azione possibile, viene generato un nodo figlio calcolando il nuovo costo cumulativo:
+\[
+g(child) = g(parent) + cost(action)
+\]
+Nel codice:
+\begin{verbatim}
+child = Node(..., node.pathcost + 1, node.pathcost + 1)
+\end{verbatim}
+(Qui si assume costo unitario +1 per ogni passo).
+
+Successivamente, si gestiscono tre casi per il nodo figlio:
+\begin{enumerate}
+    \item \textbf{Nuovo nodo}: Se lo stato non è mai stato esplorato né è in coda, viene aggiunto.
+    \item \textbf{Miglioramento (Decrease Key)}: Se lo stato è già in coda, ma il nuovo percorso è più economico (verificato da \code{present\_with\_higher\_cost}), il nodo vecchio viene sostituito con quello nuovo:
+    \begin{verbatim}
+elif present_with_higher_cost(queue, child):
+    queue.replace(child)
+    \end{verbatim}
+    \item \textbf{Scarto}: Se lo stato è già in \code{explored} o è in coda con un costo minore, il nuovo percorso viene ignorato.
+\end{enumerate}
+
+\subsection{Analisi dei Costi}
+\begin{itemize}
+    \item \textbf{Time Cost}: Numero di nodi estratti dalla coda di priorità.
+    \item \textbf{Space Cost}: Dato dalla somma della dimensione della frontiera e dell'insieme dei visitati:
+    \begin{verbatim}
+space_cost = max(space_cost, len(queue) + len(explored))
+    \end{verbatim}
+    Questo riflette la complessità spaziale tipica di UCS che può essere elevata se i costi degli archi sono molto piccoli.
+\end{itemize}
 
 
 
